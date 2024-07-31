@@ -1,6 +1,8 @@
-package com.example.demo.users_mng;
+package com.example.demo.users_mng.service;
 
-import com.example.demo.users_mng.utils.SimplePage;
+import com.example.demo.users_mng.pageable.SimplePage;
+import com.example.demo.users_mng.repository.UserRepository;
+import com.example.demo.users_mng.repository.entity.UserEntity;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -15,12 +17,12 @@ public class UserService {
 
     UserRepository userRepository;
 
-    public SimplePage<User> getAll(Pageable pageable) {
-        var users = userRepository.findAll();
-        return new SimplePage<>(users, users.size(), pageable);
+    public SimplePage<UserEntity> getAll(Pageable pageable) {
+        var users = userRepository.findAll(pageable);
+        return new SimplePage<>(users.getContent(), users.getTotalElements(), pageable);
     }
 
-    public User getById(@RequestParam Long id) {
+    public UserEntity getById(@RequestParam Long id) {
         return userRepository.findById(id).orElse(null);
     }
 

@@ -1,4 +1,4 @@
-package com.example.demo.users_mng;
+package com.example.demo.users_mng.repository.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -12,10 +12,10 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Entity(name = "users")
-public class User {
+public class UserEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    Integer id;
+    Long id;
     String username;
     String email;
     @Column(name = "created_at", columnDefinition = "TIMESTAMP")

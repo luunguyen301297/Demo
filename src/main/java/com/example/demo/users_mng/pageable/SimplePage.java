@@ -1,8 +1,9 @@
-package com.example.demo.users_mng.utils;
+package com.example.demo.users_mng.pageable;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -11,14 +12,15 @@ import org.springframework.data.domain.Sort;
 import java.util.List;
 import java.util.stream.Collectors;
 
-@JsonIgnoreProperties({"pageable", "number", "numberOfElements", "first", "last", "empty"})
+@JsonSerialize(using = SimplePageSerializer.class)
+@JsonIgnoreProperties(value = {"pageable", "number", "numberOfElements", "first", "last", "empty"})
 public class SimplePage<T> extends PageImpl<T> {
 
     @JsonCreator
     public SimplePage(@JsonProperty("content") final List<T> content,
                       @JsonProperty("totalElements") final long totalElements,
-                      @JsonProperty("totalPages") final int totalPages,
-                      @JsonProperty("page") final int page, @JsonProperty("size") final int size,
+                      @JsonProperty("page") final int page,
+                      @JsonProperty("size") final int size,
                       @JsonProperty("sort") final List<String> sort) {
         super(content, PageRequest.of(page, size,
                 Sort.by(sort.stream().map(el -> el.split(","))
@@ -26,8 +28,7 @@ public class SimplePage<T> extends PageImpl<T> {
                                 ar[0])).collect(Collectors.toList()))), totalElements);
     }
 
-    public SimplePage(final List<T> content, final long totalElements,
-                      final Pageable pageable) {
+    public SimplePage(final List<T> content, final long totalElements, final Pageable pageable) {
         super(content, pageable, totalElements);
     }
 

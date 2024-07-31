@@ -1,6 +1,8 @@
 package com.example.demo.users_mng;
 
-import com.example.demo.users_mng.utils.SimplePage;
+import com.example.demo.users_mng.pageable.SimplePage;
+import com.example.demo.users_mng.repository.entity.UserEntity;
+import com.example.demo.users_mng.service.UserService;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,14 +22,14 @@ public class UserController {
     UserService userService;
 
     @GetMapping("")
-    SimplePage<User> getUsers(
+    SimplePage<UserEntity> getUsers(
             @PageableDefault(size = 10, page = 0) Pageable pageable)
     {
         return userService.getAll(pageable);
     }
 
     @GetMapping("/{id}")
-    User getUser(@PathVariable long id) {
+    UserEntity getUser(@PathVariable long id) {
         return userService.getById(id);
     }
 
