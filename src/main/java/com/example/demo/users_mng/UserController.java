@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,7 +24,7 @@ public class UserController {
 
     @GetMapping("")
     SimplePage<UserEntity> getUsers(
-            @PageableDefault(size = 10, page = 0) Pageable pageable)
+            @PageableDefault(size = 5, sort = "id", direction = Sort.Direction.ASC) Pageable pageable)
     {
         return userService.getAll(pageable);
     }

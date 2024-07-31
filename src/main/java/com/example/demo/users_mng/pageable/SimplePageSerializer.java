@@ -21,8 +21,8 @@ public class SimplePageSerializer extends StdSerializer<SimplePage> {
     public void serialize(SimplePage simplePage, JsonGenerator gen, SerializerProvider provider) throws IOException {
         gen.writeStartObject();
         gen.writeObjectField("content", simplePage.getContent());
-        gen.writeNumberField("totalPages", simplePage.getTotalPages());
         gen.writeNumberField("totalElements", simplePage.getTotalElements());
+        gen.writeNumberField("totalPages", simplePage.getTotalPages());
         gen.writeNumberField("page", simplePage.getPage());
         gen.writeNumberField("size", simplePage.getSize());
         gen.writeObjectField("sort", simplePage.getSortList());
