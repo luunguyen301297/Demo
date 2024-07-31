@@ -1,4 +1,4 @@
-package com.example.demo.users_mng;
+package com.example.demo.users_mng.controller;
 
 import com.example.demo.users_mng.pageable.SimplePage;
 import com.example.demo.users_mng.repository.entity.UserEntity;
