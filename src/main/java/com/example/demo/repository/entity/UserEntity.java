@@ -1,4 +1,4 @@
-package com.example.demo.users_mng.repository.entity;
+package com.example.demo.repository.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -6,7 +6,8 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
 
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
