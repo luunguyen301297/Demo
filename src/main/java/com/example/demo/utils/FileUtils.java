@@ -17,7 +17,6 @@ import java.util.List;
 @Slf4j
 public class FileUtils {
 
-    // Load file from the file system
     public static FileItem loadFileAsResource(String filePath) {
         try {
             Path file = Paths.get(filePath);
@@ -29,7 +28,6 @@ public class FileUtils {
         }
     }
 
-    // Generate header
     public static void generateFileHeader(
             String filePath, String title, List<String> headers, List<String> inputRequests) {
         try (Workbook workbook = new XSSFWorkbook()) {

@@ -17,16 +17,15 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.RequestParam;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Slf4j
@@ -43,7 +42,7 @@ public class UserService {
         return new SimplePage<>(users.getContent(), users.getTotalElements(), pageable);
     }
 
-    public UserEntity getById(@RequestParam Long id) {
+    public UserEntity getById(Long id) {
         return userRepository.findById(id).orElse(null);
     }
 
@@ -58,26 +57,69 @@ public class UserService {
 
         FileUtils.generateFileHeader(filePath, title, headers, inputRequests);
 
-        int page = 0;
-        int pageSize = 100;
-        boolean nextScan = true;
-        while (nextScan) {
-            Pageable pageable = PageRequest.of(page, pageSize);
-            SimplePage<UserEntity> data = this.getAll(pageable);
+        // Transfer data between the reader and writer threads
+        BlockingQueue<List<UserEntity>> queue = new LinkedBlockingQueue<>(10);
 
-            if (data == null || CollectionUtils.isEmpty(data.getContent()) || data.getContent().size() < pageSize) {
-                nextScan = false;
+        // Reader task
+        int pageSize = 100;
+        Runnable readTask = () -> {
+            int page = 0;
+            boolean nextScan = true;
+            try {
+                while (nextScan) {
+                    Pageable pageable = PageRequest.of(page, pageSize);
+                    SimplePage<UserEntity> data = this.getAll(pageable);
+
+                    if (data == null || CollectionUtils.isEmpty(data.getContent()) || data.getContent().size() < pageSize) {
+                        nextScan = false;
+                    }
+                    if (data != null && !CollectionUtils.isEmpty(data.getContent())) {
+                        queue.put(data.getContent());
+                    }
+                    page += 1;
+                }
+                queue.put(Collections.emptyList());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Reader thread interrupted: {}", e.getMessage());
             }
-            assert data != null;
-            this.appendData(filePath, data.getContent(), page, pageSize);
-            page += 1;
+        };
+
+        // Writer task (pass page and pageSize to appendData)
+        Runnable writeTask = () -> {
+            int page = 0;
+            try {
+                List<UserEntity> users;
+                while (!(users = queue.take()).isEmpty()) {
+                    this.appendData(filePath, users, page, pageSize);
+                    page++;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Writer thread interrupted: {}", e.getMessage());
+            }
+        };
+
+        // Execute the tasks concurrently
+        executorService.execute(readTask);
+        executorService.execute(writeTask);
+
+        // Shutdown the executor service after tasks completion
+        executorService.shutdown();
+        try {
+            if (!executorService.awaitTermination(60, TimeUnit.MINUTES)) {
+                executorService.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+            Thread.currentThread().interrupt();
         }
 
         log.info("Exec time : {}", System.currentTimeMillis() - startTime);
         return FileUtils.loadFileAsResource(filePath);
     }
 
-    public void appendData(String filePath, List<UserEntity> users, Integer page, Integer pageSize) {
+    public void appendData(String filePath, List<UserEntity> users, int page, int pageSize) {
         try (
                 FileInputStream fis = new FileInputStream(filePath);
                 Workbook workbook = WorkbookFactory.create(fis)
@@ -86,13 +128,13 @@ public class UserService {
             int lastRowNum = sheet.getLastRowNum();
             int newRowNum = lastRowNum + 1;
 
-            int noOfRow = 0;
-            for (UserEntity u : users) {
-                noOfRow += 1;
+            for (int i = 0; i < users.size(); i++) {
+                UserEntity u = users.get(i);
                 Row row = sheet.createRow(newRowNum++);
                 int column = 0;
+                int globalRowNumber = page * pageSize + i + 1;
 
-                row.createCell(column++).setCellValue(page * pageSize + noOfRow);
+                row.createCell(column++).setCellValue(globalRowNumber);
                 row.createCell(column++).setCellValue(u.getId() != null ? String.valueOf(u.getId()) : "");
                 row.createCell(column++).setCellValue(u.getUsername() != null ? u.getUsername() : "");
                 row.createCell(column++).setCellValue(u.getEmail() != null ? u.getEmail() : "");
