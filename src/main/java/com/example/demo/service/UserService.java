@@ -47,7 +47,7 @@ public class UserService {
     }
 
     public FileItem exportToFile() {
-        long startTime = System.currentTimeMillis();
+        long start = System.currentTimeMillis();
         String filePath = String.format("User_Report_%s.xlsx",
                 new SimpleDateFormat("ddMMyyyy").format(new Date()));
         final String title = "USER_REPORT";
@@ -61,7 +61,7 @@ public class UserService {
         BlockingQueue<List<UserEntity>> queue = new LinkedBlockingQueue<>(10);
 
         // Reader task
-        int pageSize = 100;
+        int pageSize = 500;
         Runnable readTask = () -> {
             int page = 0;
             boolean nextScan = true;
@@ -114,12 +114,11 @@ public class UserService {
             executorService.shutdownNow();
             Thread.currentThread().interrupt();
         }
-
-        log.info("Exec time : {}", System.currentTimeMillis() - startTime);
+        System.err.println(System.currentTimeMillis() - start);
         return FileUtils.loadFileAsResource(filePath);
     }
 
-    public void appendData(String filePath, List<UserEntity> users, int page, int pageSize) {
+    private void appendData(String filePath, List<UserEntity> users, int page, int pageSize) {
         try (
                 FileInputStream fis = new FileInputStream(filePath);
                 Workbook workbook = WorkbookFactory.create(fis)
