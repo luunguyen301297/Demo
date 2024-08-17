@@ -5,27 +5,19 @@ import com.example.demo.pageable.SimplePage;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.entity.UserEntity;
 import com.example.demo.utils.FileUtils;
+import com.example.demo.utils.ReaderTask;
+import com.example.demo.utils.WriterTask;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.io.FileInputStream;
-import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Service
 @Slf4j
@@ -37,6 +29,8 @@ public class UserService {
 
     ExecutorService executorService;
 
+    static int QUERY_BATCH_SIZE = 500;
+
     public SimplePage<UserEntity> getAll(Pageable pageable) {
         var users = userRepository.findAll(pageable);
         return new SimplePage<>(users.getContent(), users.getTotalElements(), pageable);
@@ -47,7 +41,7 @@ public class UserService {
     }
 
     public FileItem exportToFile() {
-        long start = System.currentTimeMillis();
+        long startTime = System.currentTimeMillis();
         String filePath = String.format("User_Report_%s.xlsx",
                 new SimpleDateFormat("ddMMyyyy").format(new Date()));
         final String title = "USER_REPORT";
@@ -57,92 +51,31 @@ public class UserService {
 
         FileUtils.generateFileHeader(filePath, title, headers, inputRequests);
 
-        // Transfer data between the reader and writer threads
         BlockingQueue<List<UserEntity>> queue = new LinkedBlockingQueue<>(10);
 
-        // Reader task
-        int pageSize = 500;
-        Runnable readTask = () -> {
-            int page = 0;
-            boolean nextScan = true;
-            try {
-                while (nextScan) {
-                    Pageable pageable = PageRequest.of(page, pageSize);
-                    SimplePage<UserEntity> data = this.getAll(pageable);
+        CompletableFuture<Void> readFuture = CompletableFuture
+                .runAsync(new ReaderTask<>(userRepository, queue, QUERY_BATCH_SIZE), executorService);
 
-                    if (data == null || CollectionUtils.isEmpty(data.getContent()) || data.getContent().size() < pageSize) {
-                        nextScan = false;
-                    }
-                    if (data != null && !CollectionUtils.isEmpty(data.getContent())) {
-                        queue.put(data.getContent());
-                    }
-                    page += 1;
-                }
-                queue.put(Collections.emptyList());
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Reader thread interrupted: {}", e.getMessage());
-            }
-        };
+        CompletableFuture<Void> writeFuture = CompletableFuture
+                .runAsync(new WriterTask<>(queue, filePath, this::mapUserEntityToRow), executorService);
 
-        // Writer task (pass page and pageSize to appendData)
-        Runnable writeTask = () -> {
-            int page = 0;
-            try {
-                List<UserEntity> users;
-                while (!(users = queue.take()).isEmpty()) {
-                    this.appendData(filePath, users, page, pageSize);
-                    page++;
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.error("Writer thread interrupted: {}", e.getMessage());
-            }
-        };
+        CompletableFuture<Void> combinedFuture = CompletableFuture.allOf(readFuture, writeFuture);
 
-        // Execute the tasks concurrently
-        executorService.execute(readTask);
-        executorService.execute(writeTask);
+        combinedFuture.thenRun(() -> {
+            log.info("Completed write to file: {}", filePath);
+            log.info(String.valueOf(System.currentTimeMillis() - startTime));
+        }).join();
 
-        // Shutdown the executor service after tasks completion
-        executorService.shutdown();
-        try {
-            if (!executorService.awaitTermination(60, TimeUnit.MINUTES)) {
-                executorService.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executorService.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-        System.err.println(System.currentTimeMillis() - start);
         return FileUtils.loadFileAsResource(filePath);
     }
 
-    private void appendData(String filePath, List<UserEntity> users, int page, int pageSize) {
-        try (
-                FileInputStream fis = new FileInputStream(filePath);
-                Workbook workbook = WorkbookFactory.create(fis)
-        ) {
-            Sheet sheet = workbook.getSheetAt(0);
-            int lastRowNum = sheet.getLastRowNum();
-            int newRowNum = lastRowNum + 1;
-
-            for (int i = 0; i < users.size(); i++) {
-                UserEntity u = users.get(i);
-                Row row = sheet.createRow(newRowNum++);
-                int column = 0;
-                int globalRowNumber = page * pageSize + i + 1;
-
-                row.createCell(column++).setCellValue(globalRowNumber);
-                row.createCell(column++).setCellValue(u.getId() != null ? String.valueOf(u.getId()) : "");
-                row.createCell(column++).setCellValue(u.getUsername() != null ? u.getUsername() : "");
-                row.createCell(column++).setCellValue(u.getEmail() != null ? u.getEmail() : "");
-                row.createCell(column).setCellValue(u.getCreatedAt() != null ? u.getCreatedAt().toString() : "");
-            }
-            FileUtils.writeWorkBookToFile(workbook, filePath);
-        } catch (IOException e) {
-            log.error("Error reading workbook: {}", e.getMessage());
-        }
+    private void mapUserEntityToRow(Row row, UserEntity user, int rowIndex) {
+        int column = 0;
+        row.createCell(column++).setCellValue(rowIndex - 3);
+        row.createCell(column++).setCellValue(user.getId() != null ? String.valueOf(user.getId()) : "");
+        row.createCell(column++).setCellValue(user.getUsername() != null ? user.getUsername() : "");
+        row.createCell(column++).setCellValue(user.getEmail() != null ? user.getEmail() : "");
+        row.createCell(column).setCellValue(user.getCreatedAt() != null ? user.getCreatedAt().toString() : "");
     }
 
 }
