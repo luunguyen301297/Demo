@@ -16,7 +16,7 @@ import java.util.concurrent.BlockingQueue;
 @Slf4j
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public final class ReaderTask<T, ID> implements Runnable {
+public final class DbReaderTask<T, ID> implements Runnable {
 
     JpaRepository<T, ID> repository;
     BlockingQueue<List<T>> queue;

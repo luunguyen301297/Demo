@@ -17,11 +17,11 @@ import java.util.concurrent.BlockingQueue;
 @Slf4j
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public final class WriterTask<T> implements Runnable {
+public final class DbWriterTask<T> implements Runnable {
 
     BlockingQueue<List<T>> queue;
     String filePath;
-    TriConsumer<Row, T, Integer> rowConsumer;
+    QuadConsumer<Row, T, Integer, Integer> rowConsumer;
 
     @Override
     public void run() {
@@ -37,10 +37,14 @@ public final class WriterTask<T> implements Runnable {
             while (!(data = queue.take()).isEmpty()) {
                 for (T item : data) {
                     Row row = sheet.createRow(newRowNum++);
-                    rowConsumer.accept(row, item, newRowNum);
+                    rowConsumer.accept(row, item, lastRowNum, newRowNum);
                 }
             }
-            FileUtils.writeWorkBookToFile(workbook, filePath);
+            int maxCell = sheet.getRow(lastRowNum + 1).getLastCellNum();
+            for (int i = 0; i < maxCell; i++) {
+                sheet.autoSizeColumn(i);
+            }
+            ExelUtils.writeWorkBookToFile(workbook, filePath);
         } catch (IOException | InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Writer thread interrupted: {}", e.getMessage());

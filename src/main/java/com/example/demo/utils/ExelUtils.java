@@ -15,21 +15,12 @@ import java.nio.file.Paths;
 import java.util.List;
 
 @Slf4j
-public class FileUtils {
+public class ExelUtils {
 
-    public static FileItem loadFileAsResource(String filePath) {
-        try {
-            Path file = Paths.get(filePath);
-            ByteArrayResource resource = new ByteArrayResource(Files.readAllBytes(file));
-            return FileItem.builder().fileName(file.getFileName().toString()).resource(resource).build();
-        } catch (IOException e) {
-            log.error(e.getMessage(), e);
-            return null;
-        }
-    }
-
-    public static void generateFileHeader(
-            String filePath, String title, List<String> headers, List<String> inputRequests) {
+    public static void generateFileHeader(String filePath,
+                                          String title,
+                                          List<String> fileDescriptions,
+                                          List<String> headers) {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet();
             int rowNum = 0;
@@ -47,11 +38,12 @@ public class FileUtils {
             titleCell.setCellStyle(titleStyle);
 
             // Merge title cell across columns
-            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 6));
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, headers.size() - 1));
 
-            for (String inputRequest : inputRequests) {
-                Row inputRow = sheet.createRow(rowNum);
-                inputRow.createCell(0).setCellValue(inputRequest);
+            for (String description : fileDescriptions) {
+                Row descriptionRow = sheet.createRow(rowNum);
+                descriptionRow.createCell(0).setCellValue(description);
+                sheet.addMergedRegion(new CellRangeAddress(1, fileDescriptions.size() , 0, headers.size() - 1));
                 rowNum++;
             }
 
@@ -66,6 +58,20 @@ public class FileUtils {
             log.info("Excel file written successfully at: {}", filePath);
         } catch (IOException e) {
             log.error(e.getMessage(), e);
+        }
+    }
+
+    public static FileItem loadFileAsResource(String filePath) {
+        try {
+            Path file = Paths.get(filePath);
+            ByteArrayResource resource = new ByteArrayResource(Files.readAllBytes(file));
+            return FileItem.builder()
+                    .fileName(file.getFileName().toString())
+                    .resource(resource)
+                    .build();
+        } catch (IOException e) {
+            log.error(e.getMessage(), e);
+            return null;
         }
     }
 
@@ -86,4 +92,3 @@ public class FileUtils {
     }
 
 }
-

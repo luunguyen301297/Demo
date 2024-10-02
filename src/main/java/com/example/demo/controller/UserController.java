@@ -16,8 +16,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Set;
-
 @RestController
 @RequestMapping("/users")
 @AllArgsConstructor
@@ -40,7 +38,7 @@ public class UserController {
 
     @GetMapping(value = "/export")
     ResponseEntity<Resource> reportDashboardFindExportToFile() {
-        FileItem fileItem = userService.exportToFile();
+        FileItem fileItem = userService.exportFromDbToFile();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + fileItem.getFileName() + "\"")
