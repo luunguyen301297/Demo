@@ -4,10 +4,7 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
+import org.apache.poi.ss.usermodel.*;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -30,17 +27,26 @@ public final class DbWriterTask<T> implements Runnable {
                 Workbook workbook = WorkbookFactory.create(fis)
         ) {
             Sheet sheet = workbook.getSheetAt(0);
-            int lastRowNum = sheet.getLastRowNum();
-            int newRowNum = lastRowNum + 1;
+            int headerLastRowNum = sheet.getLastRowNum();
+            int newRowNum = headerLastRowNum + 1;
+
+            CellStyle borderStyle = workbook.createCellStyle();
+            borderStyle.setBorderTop(BorderStyle.THIN);
+            borderStyle.setBorderBottom(BorderStyle.THIN);
+            borderStyle.setBorderLeft(BorderStyle.THIN);
+            borderStyle.setBorderRight(BorderStyle.THIN);
 
             List<T> data;
             while (!(data = queue.take()).isEmpty()) {
                 for (T item : data) {
                     Row row = sheet.createRow(newRowNum++);
-                    rowConsumer.accept(row, item, lastRowNum, newRowNum);
+                    rowConsumer.accept(row, item, headerLastRowNum, newRowNum);
+                    for (Cell cell : row) {
+                        cell.setCellStyle(borderStyle);
+                    }
                 }
             }
-            int maxCell = sheet.getRow(lastRowNum + 1).getLastCellNum();
+            int maxCell = sheet.getRow(headerLastRowNum + 1).getLastCellNum();
             for (int i = 0; i < maxCell; i++) {
                 sheet.autoSizeColumn(i);
             }
