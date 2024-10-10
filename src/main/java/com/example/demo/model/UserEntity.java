@@ -1,10 +1,8 @@
-package com.example.demo.repository.entity;
+package com.example.demo.model;
 
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-
-import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -15,10 +13,9 @@ import java.time.LocalDateTime;
 @Entity(name = "users")
 public class UserEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id;
     String username;
     String email;
-    @Column(name = "created_at", columnDefinition = "TIMESTAMP")
-    LocalDateTime createdAt;
+    String phone;
+    Integer age;
 }

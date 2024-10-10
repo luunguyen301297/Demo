@@ -1,12 +1,14 @@
 package com.example.demo.utils;
 
-import com.example.demo.controller.model.FileItem;
+import com.example.demo.model.FileItem;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellRangeAddress;
-import org.apache.poi.xssf.usermodel.XSSFColor;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -20,21 +22,24 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
-@SuppressWarnings("unused")
-public class ExelUtils {
+@SuppressWarnings({"unused","Duplicates"})
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class ExcelUtils {
 
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final SimpleDateFormat SIMPLE_DATE_FORMAT = new SimpleDateFormat("dd/MM/yyyy");
+    static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    static SimpleDateFormat SIMPLE_DATE_FORMAT = new SimpleDateFormat("dd/MM/yyyy");
+    static String TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    static String TYPE_MACRO = "application/vnd.ms-excel.sheet.macroEnabled.12";
 
-    public static void generateFileHeader(String filePath,
-                                          String title,
-                                          List<String> fileDescriptions,
-                                          List<String> headers) {
+    public static boolean hasExcelFormat(MultipartFile file) {
+        return TYPE.equals(file.getContentType()) || TYPE_MACRO.equalsIgnoreCase(file.getContentType());
+    }
+
+    public static void generateFileHeader(String filePath, String title,
+                                          List<String> fileDescriptions, List<String> headers) {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet();
             int rowNum = 0;
@@ -44,9 +49,6 @@ public class ExelUtils {
             titleFont.setFontHeightInPoints((short) 20);
             titleFont.setBold(true);
             titleStyle.setFont(titleFont);
-            XSSFColor LIGHT_RED = new XSSFColor(new byte[]{(byte) 255, (byte) 160, (byte) 160}, null);
-//            titleStyle.setFillForegroundColor(LIGHT_RED);
-//            titleStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
 
             Row titleRow = sheet.createRow(rowNum++);
             Cell titleCell = titleRow.createCell(0);
@@ -55,15 +57,10 @@ public class ExelUtils {
 
             sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, headers.size() - 1));
 
-//            CellStyle descriptionStyle = workbook.createCellStyle();
-//            descriptionStyle.setFillForegroundColor(IndexedColors.LIGHT_YELLOW.getIndex());
-//            descriptionStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-
             for (String description : fileDescriptions) {
                 Row descriptionRow = sheet.createRow(rowNum);
                 Cell descriptionCell = descriptionRow.createCell(0);
                 descriptionCell.setCellValue(description);
-//                descriptionCell.setCellStyle(descriptionStyle);
                 sheet.addMergedRegion(new CellRangeAddress(rowNum, rowNum, 0, headers.size() - 1));
                 rowNum++;
             }
@@ -122,12 +119,19 @@ public class ExelUtils {
         }
     }
 
-    public static <T> void mapObjectToRow(Row row, T t, int headerLastRowNum, int rowIndex) {
-        int column = 0;
-        int headerHeight = rowIndex - headerLastRowNum - 1;
-        row.createCell(column++).setCellValue(headerHeight);
+    public static <T> List<String> extractHeadersFromObjects(Class<T> t) {
+        List<String> headers = new ArrayList<>();
+        headers.add("NO");
+        Field[] fields = t.getDeclaredFields();
+        for (Field field : fields) {
+            headers.add(field.getName().toUpperCase());
+        }
+        return headers;
+    }
 
-        DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    public static <T> void mapObjectToRow(Row row, T t, int headerLastRowIndex, int dataRowStartIndex) {
+        int column = 0;
+        row.createCell(column++).setCellValue(dataRowStartIndex - headerLastRowIndex - 1);
 
         Field[] fields = t.getClass().getDeclaredFields();
         for (Field field : fields) {
@@ -164,14 +168,8 @@ public class ExelUtils {
         }
     }
 
-    public static <T> List<String> extractHeadersFromObjects(Class<T> t) {
-        List<String> headers = new ArrayList<>();
-        headers.add("NO");
-        Field[] fields = t.getDeclaredFields();
-        for (Field field : fields) {
-            headers.add(field.getName().toUpperCase());
-        }
-        return headers;
+    public static boolean isValidExcelFile(MultipartFile file) {
+        return Objects.equals(file.getContentType(), TYPE);
     }
 
 }

@@ -14,7 +14,7 @@ import java.util.concurrent.BlockingQueue;
 @Slf4j
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
-public final class DbWriterTask<T> implements Runnable {
+public final class ExcelWriterTask<T> implements Runnable {
 
     BlockingQueue<List<T>> queue;
     String filePath;
@@ -27,8 +27,8 @@ public final class DbWriterTask<T> implements Runnable {
                 Workbook workbook = WorkbookFactory.create(fis)
         ) {
             Sheet sheet = workbook.getSheetAt(0);
-            int headerLastRowNum = sheet.getLastRowNum();
-            int newRowNum = headerLastRowNum + 1;
+            int headerLastRowIndex = sheet.getLastRowNum();
+            int dataRowStartIndex = headerLastRowIndex + 1;
 
             CellStyle borderStyle = workbook.createCellStyle();
             borderStyle.setBorderTop(BorderStyle.THIN);
@@ -39,18 +39,18 @@ public final class DbWriterTask<T> implements Runnable {
             List<T> data;
             while (!(data = queue.take()).isEmpty()) {
                 for (T item : data) {
-                    Row row = sheet.createRow(newRowNum++);
-                    rowConsumer.accept(row, item, headerLastRowNum, newRowNum);
+                    Row row = sheet.createRow(dataRowStartIndex++);
+                    rowConsumer.accept(row, item, headerLastRowIndex, dataRowStartIndex);
                     for (Cell cell : row) {
                         cell.setCellStyle(borderStyle);
                     }
                 }
             }
-            int maxCell = sheet.getRow(headerLastRowNum + 1).getLastCellNum();
+            int maxCell = sheet.getRow(headerLastRowIndex + 1).getLastCellNum();
             for (int i = 0; i < maxCell; i++) {
                 sheet.autoSizeColumn(i);
             }
-            ExelUtils.writeWorkBookToFile(workbook, filePath);
+            ExcelUtils.writeWorkBookToFile(workbook, filePath);
         } catch (IOException | InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Writer thread interrupted: {}", e.getMessage());
