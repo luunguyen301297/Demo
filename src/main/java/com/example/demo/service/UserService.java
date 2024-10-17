@@ -24,10 +24,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -69,45 +66,47 @@ public class UserService {
         return ExcelUtils.loadFileAsResource(filePath);
     }
 
-    public List<UserEntity> getDataFromExcel(InputStream inputStream, int headerHeight) throws IOException {
+    public Map<String, Object> getDataFromExcel(InputStream inputStream, int headerHeight) throws IOException {
         List<UserEntity> users = new ArrayList<>();
-        XSSFWorkbook workbook;
-        workbook = new XSSFWorkbook(inputStream);
+        XSSFWorkbook workbook = new XSSFWorkbook(inputStream);
         XSSFSheet sheet = workbook.getSheetAt(0);
-
         UserEntity user;
+
         int rowIndex = 0;
+        Map<Integer, String> errorMessageMapByRows = new HashMap<>();
         for (Row row : sheet) {
             if (rowIndex < headerHeight) {
                 rowIndex++;
                 continue;
             }
-            Iterator<Cell> cellIterator = row.iterator();
-            int cellIndex = 0;
+
             user = new UserEntity();
-            while (cellIterator.hasNext()) {
-                Cell cell = cellIterator.next();
-                switch (cellIndex) {
-                    case 1 -> user.setId((long) cell.getNumericCellValue());
-                    case 2 -> user.setUsername(cell.getStringCellValue());
-                    case 3 -> user.setEmail(cell.getStringCellValue());
-                    case 4 -> user.setPhone(cell.getStringCellValue());
-                    case 5 -> user.setAge((int) cell.getNumericCellValue());
-                    default -> {
+            try {
+                Iterator<Cell> cellIterator = row.iterator();
+                int cellIndex = 0;
+                while (cellIterator.hasNext()) {
+                    Cell cell = cellIterator.next();
+                    switch (cellIndex) {
+                        case 1 -> user.setId((long) cell.getNumericCellValue());
+                        case 2 -> user.setUsername(cell.getStringCellValue());
+                        case 3 -> user.setEmail(cell.getStringCellValue());
+                        case 4 -> user.setPhone(cell.getStringCellValue());
+                        case 5 -> user.setAge((int) cell.getNumericCellValue());
+                        default -> {}
                     }
+                    cellIndex++;
                 }
-                cellIndex++;
+                users.add(user);
+            } catch (Exception e) {
+                String errorMessage = String.format(e.getMessage());
+                errorMessageMapByRows.put(row.getRowNum() + 1, errorMessage);
             }
-            users.add(user);
+            rowIndex++;
         }
-
-        return users;
-    }
-
-    public void save(MultipartFile file) throws IOException {
-        if (!ExcelUtils.hasExcelFormat(file)) throw new RuntimeException("err format");
-        List<UserEntity> users = this.getDataFromExcel(file.getInputStream(), 3);
-        customUserRepository.saveAll(users);
+        Map<String, Object> response = new HashMap<>();
+        response.put("users", users);
+        response.put("errorMessageMapByRows", errorMessageMapByRows);
+        return response;
     }
 
     public FileItem saveWithErrorReport(MultipartFile file) throws IOException {
@@ -115,51 +114,34 @@ public class UserService {
             throw new RuntimeException("Invalid file format");
         }
 
-        List<UserEntity> users = this.getDataFromExcel(file.getInputStream(), 3);
-        List<UserEntity> failedUsers = new ArrayList<>();
-        List<String> errorMessages = new ArrayList<>();
+        Map<String, Object> data = getDataFromExcel(file.getInputStream(), 3);
+        List<UserEntity> users = (List<UserEntity>) data.get("users");
+        Map<Integer, String> errorMessageMapByRows = (Map<Integer, String>) data.get("errorMessageMapByRows");
+        customUserRepository.saveAll(users);
 
-        for (UserEntity user : users) {
-            try {
-                userRepository.save(user);
-            } catch (Exception e) {
-                failedUsers.add(user);
-                errorMessages.add(e.getMessage());
-            }
-        }
-
-        if (!failedUsers.isEmpty()) {
+        if (!errorMessageMapByRows.isEmpty()) {
             String errorFilePath = String.format("Error_Report_%s.xlsx",
                     new SimpleDateFormat("ddMMyyyy").format(new Date()));
-            generateErrorFile(errorFilePath, failedUsers, errorMessages);
+            generateErrorFile(errorFilePath, errorMessageMapByRows);
             return ExcelUtils.loadFileAsResource(errorFilePath);
         }
 
-        return null;
+        return new FileItem();
     }
 
-    private void generateErrorFile(String filePath, List<UserEntity> failedUsers, List<String> errorMessages) {
+    private void generateErrorFile(String filePath, Map<Integer, String> errorMessageMapByRows) {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Error Report");
             int rowNum = 0;
 
             Row headerRow = sheet.createRow(rowNum++);
-            headerRow.createCell(0).setCellValue("ID");
-            headerRow.createCell(1).setCellValue("Username");
-            headerRow.createCell(2).setCellValue("Email");
-            headerRow.createCell(3).setCellValue("Phone");
-            headerRow.createCell(4).setCellValue("Age");
-            headerRow.createCell(5).setCellValue("Error Message");
+            headerRow.createCell(0).setCellValue("Row Num");
+            headerRow.createCell(1).setCellValue("Error Message");
 
-            for (int i = 0; i < failedUsers.size(); i++) {
-                UserEntity user = failedUsers.get(i);
+            for (Integer key : errorMessageMapByRows.keySet()) {
                 Row row = sheet.createRow(rowNum++);
-                row.createCell(0).setCellValue(user.getId());
-                row.createCell(1).setCellValue(user.getUsername());
-                row.createCell(2).setCellValue(user.getEmail());
-                row.createCell(3).setCellValue(user.getPhone());
-                row.createCell(4).setCellValue(user.getAge());
-                row.createCell(5).setCellValue(errorMessages.get(i));
+                row.createCell(0).setCellValue(key);
+                row.createCell(1).setCellValue(errorMessageMapByRows.get(key));
             }
 
             try (FileOutputStream fileOut = new FileOutputStream(filePath)) {
